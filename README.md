@@ -19,6 +19,10 @@ Die Anwendung läuft komplett im Browser und muss nicht installiert werden. Auf 
 1. **Online:** [sigtec.github.io/bma-sim](https://sigtec.github.io/bma-sim/) im Browser öffnen.
 2. **Lokal:** Repository klonen oder als ZIP herunterladen (**Code → Download ZIP**), entpacken und `index.html` per Doppelklick im Browser öffnen. Es ist keine Installation und kein Webserver nötig.
 
+## Bildtafeln
+
+Für Übungsszenarien können diese [Bildtafeln](BMA-Sim_Bildtafeln.pdf) verwendet werden. Diese lassen sich doppelseitig drucken und laminieren.
+
 ## Projektstruktur
 
 | Datei / Ordner | Beschreibung |
