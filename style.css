@@ -24,6 +24,7 @@ body {
     background-color: #121212;
     color: #ffffff;
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -71,6 +72,14 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
+}
+
+/* Skaliertes Layout (js/layout.js): feste Grundgröße, gleichmäßig per zoom vergrößert */
+.din-container.layout-scaled {
+    width: 500px;
+    max-width: none;
+    margin: auto;
+    zoom: var(--ui-scale, 1);
 }
 
 .din-panel {

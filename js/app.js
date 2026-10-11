@@ -12,6 +12,9 @@ document.addEventListener('DOMContentLoaded', () => {
     bmz.subscribe((state) => fbf.render(state));
     bmz.subscribe((state) => admin.render(state));
 
+    // Layout an Bildschirmgröße anpassen
+    new LayoutScaler();
+
     // Vollbild-Button Logik
     const btnFullscreen = document.getElementById('btn-fullscreen');
     if (btnFullscreen) {

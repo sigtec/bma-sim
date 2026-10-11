@@ -13,6 +13,7 @@ const STATIC_ASSETS = [
     './js/fat.js',
     './js/fbf.js',
     './js/admin.js',
+    './js/layout.js',
     './icons/icon-192.png',
     './icons/icon-512.png',
     './icons/icon-maskable-512.png',
