@@ -1,3 +1,42 @@
+const PRESET_STORAGE_KEY = 'bma_scenario_presets';
+const ALARM_TYPES = ['aut Meld', 'Handmeld', 'Sprinkler', 'Störung'];
+
+// Prüft eine Liste von Schleifen und vereinheitlicht sie. Wirft einen Error mit lesbarer Meldung.
+function normalizePresets(data) {
+    if (!Array.isArray(data)) {
+        throw new Error("Erwartet wird eine Liste von Schleifen (JSON-Array).");
+    }
+
+    const toInt = (value, min, max, field, where) => {
+        const n = Number(value);
+        if (!Number.isInteger(n) || n < min || n > max) {
+            throw new Error(`${where}: ${field} muss eine Zahl von ${min} bis ${max} sein (ist: ${JSON.stringify(value)}).`);
+        }
+        return n;
+    };
+
+    return data.map((p, i) => {
+        const where = `Eintrag ${i + 1}`;
+        if (!p || typeof p !== 'object') throw new Error(`${where}: kein gültiges Objekt.`);
+
+        const typeText = p.typeText ?? 'aut Meld';
+        if (!ALARM_TYPES.includes(typeText)) {
+            throw new Error(`${where}: unbekannte Meldungsart ${JSON.stringify(typeText)}.`);
+        }
+        if (typeof p.loc !== 'string') {
+            throw new Error(`${where}: Standorttext (loc) fehlt.`);
+        }
+
+        return {
+            group: toInt(p.group, 1, 999, 'Gruppe', where),
+            detector: toInt(p.detector, 1, 99, 'Melder', where),
+            count: toInt(p.count ?? 1, 1, 99, 'Anzahl', where),
+            typeText: typeText,
+            loc: p.loc.substring(0, 20)
+        };
+    });
+}
+
 class AdminUI {
     constructor(bmz) {
         this.bmz = bmz;
@@ -5,57 +44,73 @@ class AdminUI {
 
         this.initDOM();
         this.bindEvents();
-        
-        // Erst Speicher/Server prüfen, dann initial rendern
+
         this.initPresets();
     }
 
-    // Lädt Presets: 1. LocalStorage -> 2. default.json vom Server -> 3. Fallback []
+    // Lädt Presets: 1. ?scenario=... (explizit angefordert) -> 2. LocalStorage -> 3. default.json
     async initPresets() {
-        // 1. Parameter aus dem Querystring auslesen (z.B. ?scenario=foobar oder ?scenario=foobar.json)
         const urlParams = new URLSearchParams(window.location.search);
-        let scenarioParam = urlParams.get('scenario') || urlParams.get('szenario');
-    
-        // Dateinamen aufbauen (hängt .json an, falls nicht vorhanden)
-        let fileName = 'default.json';
+        const scenarioParam = urlParams.get('scenario') || urlParams.get('szenario');
+
         if (scenarioParam) {
-            fileName = scenarioParam.endsWith('.json') ? scenarioParam : `${scenarioParam}.json`;
+            // Nur relative Dateinamen zulassen (z. B. "foobar", "foobar.json", "szenarien/foobar")
+            if (/^[\w-]+(\/[\w-]+)*(\.json)?$/.test(scenarioParam)) {
+                const fileName = scenarioParam.endsWith('.json') ? scenarioParam : `${scenarioParam}.json`;
+                if (await this.loadPresetsFromFile(fileName)) return;
+            } else {
+                showToast(`Ungültiger Szenario-Name: ${scenarioParam}`, 'error');
+            }
         }
-    
-        // 2. Versuche die gewünschte JSON-Datei vom Server zu laden
+
+        if (this.loadPresetsFromStorage()) return;
+
+        await this.loadPresetsFromFile('default.json');
+    }
+
+    async loadPresetsFromFile(fileName) {
         try {
             const response = await fetch(fileName, { cache: 'no-cache' });
-            if (response.ok) {
-                const data = await response.json();
-                if (Array.isArray(data)) {
-                    this.presetAlarms = data;
-                    this.saveToStorage();
-                    this.renderPresets();
-                    return;
-                }
-            }
+            if (!response.ok) throw new Error(`HTTP-Status ${response.status}`);
+            this.setPresets(normalizePresets(await response.json()));
+            return true;
         } catch (err) {
-            console.warn(`Datei ${fileName} konnte nicht geladen werden. Prüfe LocalStorage / Fallback.`, err);
+            showToast(`Datei ${fileName} konnte nicht geladen werden: ${err.message}`, 'error');
+            return false;
         }
-    
-        // 3. Fallback: LocalStorage laden, falls Datei nicht erreichbar war
-        const saved = localStorage.getItem('bma_scenario_presets');
-        if (saved) {
-            try {
-                this.presetAlarms = JSON.parse(saved);
-            } catch (e) {
-                console.error("Fehler beim Lesen aus localStorage:", e);
-                this.presetAlarms = [];
-            }
-        } else {
-            this.presetAlarms = [];
+    }
+
+    loadPresetsFromStorage() {
+        let saved = null;
+        try {
+            saved = localStorage.getItem(PRESET_STORAGE_KEY);
+        } catch (e) {
+            return false;
         }
-    
+        if (saved === null) return false;
+
+        try {
+            this.presetAlarms = normalizePresets(JSON.parse(saved));
+            this.renderPresets();
+            return true;
+        } catch (err) {
+            showToast(`Gespeicherte Schleifen sind ungültig und werden ignoriert: ${err.message}`, 'error');
+            return false;
+        }
+    }
+
+    setPresets(presets) {
+        this.presetAlarms = presets;
+        this.saveToStorage();
         this.renderPresets();
     }
-    
+
     saveToStorage() {
-        localStorage.setItem('bma_scenario_presets', JSON.stringify(this.presetAlarms));
+        try {
+            localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(this.presetAlarms));
+        } catch (e) {
+            showToast("Schleifen konnten nicht im Browser gespeichert werden.", 'error');
+        }
     }
 
     initDOM() {
@@ -67,6 +122,7 @@ class AdminUI {
         this.btnNew = document.getElementById('btn-adm-new');
         this.btnImportTrigger = document.getElementById('btn-adm-import-trigger');
         this.btnExport = document.getElementById('btn-adm-export');
+        this.btnDefaults = document.getElementById('btn-adm-defaults');
         this.btnClear = document.getElementById('btn-adm-clear');
         this.inputFile = document.getElementById('input-adm-file');
 
@@ -99,6 +155,16 @@ class AdminUI {
             this.btnNew.addEventListener('click', () => this.openModalForNew());
         }
 
+        // Standard-Schleifen aus default.json wiederherstellen
+        if (this.btnDefaults) {
+            this.btnDefaults.addEventListener('click', async () => {
+                if (!confirm("Alle Schleifen durch die Standard-Schleifen ersetzen? Eigene Änderungen gehen verloren.")) return;
+                if (await this.loadPresetsFromFile('default.json')) {
+                    showToast("Standard-Schleifen geladen.");
+                }
+            });
+        }
+
         // Export (JSON)
         if (this.btnExport) {
             this.btnExport.addEventListener('click', () => {
@@ -123,16 +189,10 @@ class AdminUI {
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     try {
-                        const importedData = JSON.parse(event.target.result);
-                        if (Array.isArray(importedData)) {
-                            this.presetAlarms = importedData;
-                            this.saveToStorage();
-                            this.renderPresets();
-                        } else {
-                            alert("Ungültiges JSON-Format!");
-                        }
+                        this.setPresets(normalizePresets(JSON.parse(event.target.result)));
+                        showToast(`${this.presetAlarms.length} Schleifen importiert.`);
                     } catch (err) {
-                        alert("Fehler beim Lesen der JSON-Datei: " + err.message);
+                        showToast(`Import fehlgeschlagen: ${err.message}`, 'error');
                     }
                 };
                 reader.readAsText(file);
@@ -153,7 +213,7 @@ class AdminUI {
         this.modalCount.value = "1";
         this.modalType.value = "aut Meld";
         this.modalLoc.value = "";
-        this.modal.style.display = "flex";
+        this.modal.classList.add('open');
     }
 
     openModalForEdit(index) {
@@ -164,111 +224,108 @@ class AdminUI {
         this.modalIndex.value = index;
         this.modalGroup.value = item.group;
         this.modalDetector.value = item.detector;
-        this.modalCount.value = item.count || 1;
-        this.modalType.value = item.typeText || "aut Meld";
+        this.modalCount.value = item.count;
+        this.modalType.value = item.typeText;
         this.modalLoc.value = item.loc;
-        this.modal.style.display = "flex";
+        this.modal.classList.add('open');
     }
 
     closeModal() {
-        this.modal.style.display = "none";
+        this.modal.classList.remove('open');
     }
 
     saveModalData() {
         const index = parseInt(this.modalIndex.value, 10);
-        const newItem = {
-            group: parseInt(this.modalGroup.value, 10) || 1,
-            detector: parseInt(this.modalDetector.value, 10) || 1,
-            count: parseInt(this.modalCount.value, 10) || 1,
-            typeText: this.modalType.value,
-            loc: this.modalLoc.value.substring(0, 20)
-        };
-
-        if (index === -1) {
-            this.presetAlarms.push(newItem);
-        } else {
-            this.presetAlarms[index] = newItem;
+        let newItem;
+        try {
+            [newItem] = normalizePresets([{
+                group: Number(this.modalGroup.value),
+                detector: Number(this.modalDetector.value),
+                count: Number(this.modalCount.value),
+                typeText: this.modalType.value,
+                loc: this.modalLoc.value
+            }]);
+        } catch (err) {
+            showToast(err.message.replace(/^Eintrag 1: /, ''), 'error');
+            return;
         }
 
-        this.saveToStorage();
-        this.renderPresets();
+        const presets = [...this.presetAlarms];
+        if (index === -1) {
+            presets.push(newItem);
+        } else {
+            presets[index] = newItem;
+        }
+
+        this.setPresets(presets);
         this.closeModal();
+    }
+
+    createListItem(text, buttons) {
+        const div = document.createElement('div');
+        div.className = 'admin-list-item';
+
+        const info = document.createElement('span');
+        info.className = 'admin-list-text';
+        info.innerText = text;
+
+        const actionContainer = document.createElement('div');
+        actionContainer.className = 'admin-list-actions';
+        buttons.forEach(({ label, className, onClick }) => {
+            const btn = document.createElement('button');
+            btn.className = `btn-small ${className}`;
+            btn.innerText = label;
+            btn.addEventListener('click', onClick);
+            actionContainer.appendChild(btn);
+        });
+
+        div.appendChild(info);
+        div.appendChild(actionContainer);
+        return div;
+    }
+
+    renderEmpty(container, text) {
+        const span = document.createElement('span');
+        span.className = 'admin-empty';
+        span.innerText = text;
+        container.replaceChildren(span);
     }
 
     // Rendert die verfügbaren Schleifen (inkl. Meldungsart)
     renderPresets() {
         if (!this.presetListContainer) return;
-        this.presetListContainer.innerHTML = '';
 
         if (this.presetAlarms.length === 0) {
-            this.presetListContainer.innerHTML = '<span style="color:#888; font-size:0.8rem;">Keine Schleifen vorhanden</span>';
+            this.renderEmpty(this.presetListContainer, "Keine Schleifen vorhanden");
             return;
         }
 
-        this.presetAlarms.forEach((p, index) => {
-            const div = document.createElement('div');
-            div.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:#2a2a2a; padding:6px 8px; margin-bottom:4px; border-radius:4px; font-size:0.8rem; color:#fff;";
-
-            const info = document.createElement('span');
-            info.style.cssText = "white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 8px;";
-            // Anzeige von [Gruppe/Melder] Art - Standort
-            info.innerText = `[${String(p.group).padStart(3,'0')}/${String(p.detector).padStart(2,'0')}] ${p.typeText || 'aut Meld'} - ${p.loc}`;
-
-            const actionContainer = document.createElement('div');
-            actionContainer.style.cssText = "display:flex; gap:4px; flex-shrink:0;";
-
-            const btnTrigger = document.createElement('button');
-            btnTrigger.innerText = "Auslösen";
-            btnTrigger.style.cssText = "background:#2e7d32; color:#fff; border:none; padding:3px 6px; border-radius:3px; cursor:pointer; font-size:0.75rem; font-weight:bold;";
-            btnTrigger.addEventListener('click', () => {
-                this.bmz.addAlarm(p.group, p.detector, p.count || 1, p.typeText || "aut Meld", p.loc);
-            });
-
-            const btnEdit = document.createElement('button');
-            btnEdit.innerText = "Bearbeiten";
-            btnEdit.style.cssText = "background:#1976d2; color:#fff; border:none; padding:3px 6px; border-radius:3px; cursor:pointer; font-size:0.75rem;";
-            btnEdit.addEventListener('click', () => {
-                this.openModalForEdit(index);
-            });
-
-            actionContainer.appendChild(btnTrigger);
-            actionContainer.appendChild(btnEdit);
-
-            div.appendChild(info);
-            div.appendChild(actionContainer);
-            this.presetListContainer.appendChild(div);
-        });
+        this.presetListContainer.replaceChildren(...this.presetAlarms.map((p, index) =>
+            this.createListItem(
+                // Anzeige von [Gruppe/Melder] Art - Standort
+                `[${String(p.group).padStart(3,'0')}/${String(p.detector).padStart(2,'0')}] ${p.typeText} - ${p.loc}`,
+                [
+                    { label: "Auslösen", className: 'btn-trigger', onClick: () => this.bmz.addAlarm(p.group, p.detector, p.count, p.typeText, p.loc) },
+                    { label: "Bearbeiten", className: 'btn-edit', onClick: () => this.openModalForEdit(index) }
+                ]
+            )
+        ));
     }
 
+    // Rendert aktive Schleifen (inkl. Meldungsart)
     render(state) {
-        this.renderPresets();
-
-        // Rendert aktive Schleifen (inkl. Meldungsart)
         if (!this.alarmListContainer) return;
-        this.alarmListContainer.innerHTML = '';
 
         if (!state.alarms || state.alarms.length === 0) {
-            this.alarmListContainer.innerHTML = '<span style="color:#888; font-size:0.8rem;">Keine aktiven Schleifen</span>';
+            this.renderEmpty(this.alarmListContainer, "Keine aktiven Schleifen");
             return;
         }
 
-        state.alarms.forEach((a) => {
-            const div = document.createElement('div');
-            div.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:#2a2a2a; padding:6px 8px; margin-bottom:4px; border-radius:4px; font-size:0.8rem; color:#fff;";
-
-            const info = document.createElement('span');
-            info.style.cssText = "white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 8px;";
-            // Anzeige von [Gruppe/Melder] Art - Standort
-            info.innerText = `[${String(a.group).padStart(3,'0')}/${String(a.detector).padStart(2,'0')}] ${a.typeText} - ${a.loc}`;
-
-            const btnDelete = document.createElement('button');
-            btnDelete.innerText = "Löschen";
-            btnDelete.style.cssText = "background:#d32f2f; color:#fff; border:none; padding:3px 6px; border-radius:3px; cursor:pointer; font-size:0.75rem; flex-shrink:0;";
-            btnDelete.addEventListener('click', () => this.bmz.removeAlarm(a.id));
-
-            div.appendChild(info);
-            div.appendChild(btnDelete);
-            this.alarmListContainer.appendChild(div);
-        });
+        this.alarmListContainer.replaceChildren(...state.alarms.map((a) =>
+            this.createListItem(
+                `[${a.group}/${a.detector}] ${a.typeText} - ${a.loc}`,
+                [{ label: "Löschen", className: 'btn-delete', onClick: () => this.bmz.removeAlarm(a.id) }]
+            )
+        ));
     }
 }

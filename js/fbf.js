@@ -1,6 +1,7 @@
 class FBF {
     constructor(bmz) {
         this.bmz = bmz;
+        this.state = null;
         this.audioCtx = null;
         this.buzzerInterval = null;
         this.resetHoldTimer = null;
@@ -15,7 +16,6 @@ class FBF {
         this.ledLoeschanlage = document.getElementById('fbf-led-loeschanlage');
         this.ledBrandfall = document.getElementById('fbf-led-brandfall');
         this.ledAkustik = document.getElementById('fbf-led-akustik');
-        this.ledBmzReset = document.getElementById('fbf-led-bmz-reset');
         this.ledUeAb = document.getElementById('fbf-led-ue-ab');
 
         this.btnBrandfall = document.getElementById('btn-fbf-brandfall');
@@ -28,41 +28,49 @@ class FBF {
         this.flapUe = document.getElementById('flap-ue');
     }
 
+    isFlapOpen(flap) {
+        return !!flap && flap.classList.contains('open');
+    }
+
     bindEvents() {
         if (this.btnBrandfall) this.btnBrandfall.addEventListener('click', () => this.bmz.toggleBrandfallSteuerung());
         if (this.btnAkustik) this.btnAkustik.addEventListener('click', () => this.bmz.toggleAkustischeSignale());
         if (this.btnUeAb) this.btnUeAb.addEventListener('click', () => this.bmz.toggleUeAb());
 
-        if (this.flapBmz) this.flapBmz.addEventListener('click', () => this.flapBmz.classList.toggle('open'));
-        if (this.flapUe) this.flapUe.addEventListener('click', () => this.flapUe.classList.toggle('open'));
+        [this.flapBmz, this.flapUe].forEach(flap => {
+            if (!flap) return;
+            flap.addEventListener('click', () => {
+                const open = flap.classList.toggle('open');
+                flap.setAttribute('aria-expanded', String(open));
+            });
+        });
 
         if (this.btnUeTest) {
             this.btnUeTest.addEventListener('click', () => {
-                if (!this.flapUe || !this.flapUe.classList.contains('open')) {
-                    alert("Bitte zuerst die Schutzklappe öffnen!");
+                if (!this.isFlapOpen(this.flapUe)) {
+                    showToast("Bitte zuerst die Schutzklappe öffnen!");
                     return;
                 }
-                alert("ÜE Verbindung wird geprüft... OK!");
+                this.bmz.testUe();
             });
         }
 
         // 5s Reset Hold Timer
         if (this.btnBmzReset) {
-            const startReset = (e) => {
-                if (e) e.preventDefault();
-                if (!this.flapBmz || !this.flapBmz.classList.contains('open')) {
-                    alert("Bitte zuerst die Schutzklappe öffnen!");
+            const startReset = () => {
+                if (!this.isFlapOpen(this.flapBmz)) {
+                    showToast("Bitte zuerst die Schutzklappe öffnen!");
                     return;
                 }
                 this.btnBmzReset.classList.add('pressed');
                 this.resetHoldTimer = setTimeout(() => {
+                    this.resetHoldTimer = null;
                     this.btnBmzReset.classList.remove('pressed');
                     this.bmz.resetBMZ();
                 }, 5000);
             };
 
-            const stopReset = (e) => {
-                if (e) e.preventDefault();
+            const stopReset = () => {
                 this.btnBmzReset.classList.remove('pressed');
                 if (this.resetHoldTimer) {
                     clearTimeout(this.resetHoldTimer);
@@ -70,11 +78,7 @@ class FBF {
                 }
             };
 
-            this.btnBmzReset.addEventListener('mousedown', startReset);
-            this.btnBmzReset.addEventListener('mouseup', stopReset);
-            this.btnBmzReset.addEventListener('mouseleave', stopReset);
-            this.btnBmzReset.addEventListener('touchstart', startReset);
-            this.btnBmzReset.addEventListener('touchend', stopReset);
+            bindPress(this.btnBmzReset, startReset, stopReset);
         }
 
         // Audio bei Interaktion freischalten
@@ -93,9 +97,14 @@ class FBF {
         }
     }
 
+    isBuzzerActive() {
+        const s = this.state;
+        return !!s && s.alarms.length > 0 && !s.buzzerSilenced && !s.akustikAb;
+    }
+
     playPiezoBeep() {
         if (!this.audioCtx || this.audioCtx.state !== 'running') return;
-        if (this.bmz.buzzerSilenced || this.bmz.akustikAb || this.bmz.alarms.length === 0) return;
+        if (!this.isBuzzerActive()) return;
 
         try {
             let osc = this.audioCtx.createOscillator();
@@ -114,7 +123,7 @@ class FBF {
     }
 
     updateBuzzerSound() {
-        if (this.bmz.alarms.length > 0 && !this.bmz.buzzerSilenced && !this.bmz.akustikAb) {
+        if (this.isBuzzerActive()) {
             if (!this.buzzerInterval) {
                 this.playPiezoBeep();
                 this.buzzerInterval = setInterval(() => this.playPiezoBeep(), 400);
@@ -128,8 +137,10 @@ class FBF {
     }
 
     render(state) {
+        this.state = state;
+
         this.ledBetrieb?.classList.add('active');
-        this.ledUeAusgeloest?.classList.toggle('active', state.alarms.length > 0 && !state.ueAb);
+        this.ledUeAusgeloest?.classList.toggle('active', !!state.ueAusgeloest);
         this.ledLoeschanlage?.classList.toggle('active', !!state.loeschanlageAusgeloest);
         this.ledBrandfall?.classList.toggle('active', !!state.brandfallAb);
         this.ledAkustik?.classList.toggle('active', !!state.akustikAb);

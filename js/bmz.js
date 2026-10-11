@@ -2,12 +2,13 @@ class BMZ {
     constructor() {
         this.alarms = [];
         this.currentIndex = 0;
-        
+
         // Zustände
         this.buzzerSilenced = false;
         this.brandfallAb = false;
         this.akustikAb = false;
         this.ueAb = false;
+        this.ueAusgeloest = false;
         this.bmzStoerung = false;
         this.loeschanlageAusgeloest = false;
         this.lampTestActive = false;
@@ -27,6 +28,7 @@ class BMZ {
             brandfallAb: this.brandfallAb,
             akustikAb: this.akustikAb,
             ueAb: this.ueAb,
+            ueAusgeloest: this.ueAusgeloest,
             bmzStoerung: this.bmzStoerung,
             loeschanlageAusgeloest: this.loeschanlageAusgeloest,
             lampTestActive: this.lampTestActive
@@ -50,38 +52,25 @@ class BMZ {
         // Fokus auf die neueste Meldung setzen
         this.currentIndex = this.alarms.length - 1;
 
+        // Die ÜE bleibt ausgelöst, bis die BMZ zurückgestellt wird
+        if (!this.ueAb) this.ueAusgeloest = true;
+
         this.buzzerSilenced = false;
-        this.notify();
-    }
-
-    // NEU: Speziell für den Systemstart / Initialzustand
-    markInitialAlarmsAsRead() {
-        if (this.alarms.length === 0) return;
-
-        // Die 1. Meldung steht IMMER oben im FAT -> gelesen
-        this.alarms[0].read = true;
-
-        // Wenn es mindestens 2 Meldungen gibt, steht die aktuell fokussierte (letzte) unten -> gelesen
-        if (this.alarms.length >= 2 && this.alarms[this.currentIndex]) {
-            this.alarms[this.currentIndex].read = true;
-        }
-
-        // Alle Meldungen dazwischen (z.B. Meldung 2 bei insgesamt 3 Alarmen) bleiben auf read: false!
         this.notify();
     }
 
     navigateAlarm(dir) {
         if (this.alarms.length <= 2) return;
-        
+
         let targetIndex = this.currentIndex + dir;
         if (targetIndex >= 0 && targetIndex < this.alarms.length) {
             this.currentIndex = targetIndex;
-            
+
             // Erst durch manuelles Durchscrollen wird die angelaufene Meldung gelesen
             if (this.alarms[this.currentIndex]) {
                 this.alarms[this.currentIndex].read = true;
             }
-            
+
             this.notify();
         }
     }
@@ -98,8 +87,15 @@ class BMZ {
         this.alarms = [];
         this.currentIndex = 0;
         this.buzzerSilenced = false;
+        this.ueAusgeloest = false;
         this.loeschanlageAusgeloest = false;
         this.bmzStoerung = false;
+        this.notify();
+    }
+
+    // "ÜE prüfen": löst die ÜE aus, ohne dass die BMZ in den Alarmzustand geht
+    testUe() {
+        this.ueAusgeloest = true;
         this.notify();
     }
 

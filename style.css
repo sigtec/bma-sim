@@ -55,6 +55,16 @@ body {
 
 .btn-utility:hover { background: #333; }
 
+.top-nav-title {
+    font-size: 0.8rem;
+    color: #aaa;
+}
+
+.btn-utility-admin {
+    border-color: #ffaa00;
+    color: #ffaa00;
+}
+
 .din-container {
     width: 100%;
     max-width: 500px;
@@ -156,6 +166,16 @@ body {
 
 .fat-col:last-child { border-right: none; }
 
+.fat-col-leds { justify-content: center; }
+
+.fat-key-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.fat-key-group + .fat-key-group { margin-top: 8px; }
+
 .arrow-icon {
     font-size: 1.5rem;
     color: #ffffff;
@@ -170,6 +190,11 @@ body {
     margin: 3px 0;
 }
 
+.label-hint {
+    font-size: 0.55rem;
+    color: #ccc;
+}
+
 /* Taster Styles */
 .din-btn {
     width: 44px;
@@ -180,6 +205,9 @@ body {
     cursor: pointer;
     position: relative;
     transition: background 0.15s, box-shadow 0.15s;
+    /* Gedrückt halten (5 s) ohne Scrollen, Zoomen oder iOS-Kontextmenü */
+    touch-action: none;
+    -webkit-touch-callout: none;
 }
 
 .din-btn:active, .din-btn.pressed {
@@ -252,6 +280,16 @@ body {
     gap: 8px;
     flex: 1;
 }
+
+.fbf-cell .label-text { text-align: left; }
+
+.fbf-cell-content.ue-content {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+.ue-content .label-text { margin: 0; }
 
 .ue-box {
     background: #ffffff;
@@ -327,52 +365,161 @@ body {
     font-size: 0.9rem;
 }
 
-.admin-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 8px;
-    margin-bottom: 10px;
-}
-
-.admin-grid input, .admin-grid select {
-    background: #333;
-    color: #fff;
-    border: 1px solid #555;
-    padding: 4px 6px;
-    font-size: 0.8rem;
-    border-radius: 3px;
-}
-
-.admin-actions {
+.admin-toolbar {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
 }
 
+.admin-toolbar .btn-adm {
+    flex: 1;
+    min-width: 60px;
+    padding: 6px;
+}
+
 .btn-adm {
-    background: #ffaa00;
+    background: #e0e0e0;
     color: #000;
     border: none;
     padding: 6px 12px;
-    font-weight: bold;
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     cursor: pointer;
     border-radius: 3px;
 }
 
-.btn-adm-red { background: #d32f2f; color: #fff; }
+.btn-adm-primary { background: #2b5c8f; color: #fff; }
+.btn-adm-danger { background: #8c2b2b; color: #fff; }
+.btn-adm-neutral { background: #555; color: #fff; }
+.btn-adm-save { background: #2e7d32; color: #fff; font-weight: bold; }
 
-.active-alarms-list {
-    margin-top: 10px;
-    border-top: 1px solid #444;
-    padding-top: 6px;
+.admin-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #2a2a2a;
+    padding: 6px 8px;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: #fff;
+}
+
+.admin-list-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: 8px;
+}
+
+.admin-list-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.btn-small {
+    color: #fff;
+    border: none;
+    padding: 3px 6px;
+    border-radius: 3px;
+    cursor: pointer;
     font-size: 0.75rem;
 }
 
-.alarm-item {
-    display: flex;
-    justify-content: space-between;
-    background: #2a2a2a;
-    padding: 4px 8px;
-    margin-top: 3px;
+.btn-trigger { background: #2e7d32; font-weight: bold; }
+.btn-edit { background: #1976d2; }
+.btn-delete { background: #d32f2f; }
+
+.admin-empty {
+    color: #888;
+    font-size: 0.8rem;
 }
+
+/* --- MODAL (Schleife Neu / Bearbeiten) --- */
+.admin-modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.7);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+}
+
+.admin-modal.open { display: flex; }
+
+.modal-dialog {
+    background: #222;
+    color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    width: 320px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
+
+.modal-title {
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+    border-bottom: 1px solid #444;
+    padding-bottom: 8px;
+}
+
+.modal-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.modal-field label {
+    font-size: 0.75rem;
+    color: #ccc;
+    display: block;
+}
+
+.modal-field input, .modal-field select {
+    width: 100%;
+    padding: 6px;
+    background: #333;
+    color: #fff;
+    border: 1px solid #555;
+    border-radius: 3px;
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.modal-field-wide { margin-bottom: 15px; }
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* --- TOAST-MELDUNGEN --- */
+.toast-container {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20000;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: max-content;
+    max-width: calc(100% - 32px);
+    pointer-events: none;
+}
+
+.toast {
+    background: #333;
+    color: #fff;
+    border-left: 4px solid #ffaa00;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+}
+
+.toast-error { border-left-color: #d32f2f; }

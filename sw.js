@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bma-fat-v1';
+const CACHE_NAME = 'bma-fat-v2';
 
 // Alle statischen Ressourcen für den Offline-Betrieb
 const STATIC_ASSETS = [
@@ -7,12 +7,16 @@ const STATIC_ASSETS = [
     './manifest.json',
     './style.css',
     './default.json',
+    './js/util.js',
     './js/app.js',
     './js/bmz.js',
     './js/fat.js',
     './js/fbf.js',
-    './js/admin.js'
-    // Falls du Icons für das PWA-Manifest hast, ergänze sie hier (z.B. './icon.png')
+    './js/admin.js',
+    './icons/icon-192.png',
+    './icons/icon-512.png',
+    './icons/icon-maskable-512.png',
+    './icons/apple-touch-icon.png'
 ];
 
 // 1. Installation: Kerndateien vorab in den Cache legen
@@ -44,6 +48,7 @@ self.addEventListener('activate', (event) => {
 // 3. Fetch (Network First, Fallback to Cache)
 self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
+    if (new URL(event.request.url).origin !== self.location.origin) return;
 
     event.respondWith(
         fetch(event.request)
@@ -56,9 +61,12 @@ self.addEventListener('fetch', (event) => {
                 }
                 return networkResponse;
             })
-            .catch(() => {
+            .catch(async () => {
                 console.log('[Service Worker] Offline-Fallback für:', event.request.url);
-                return caches.match(event.request);
+                // Seitenaufrufe mit Parametern (z. B. ?scenario=...) auf die gecachte Seite abbilden
+                const ignoreSearch = event.request.mode === 'navigate';
+                const cached = await caches.match(event.request, { ignoreSearch });
+                return cached || Response.error();
             })
     );
 });

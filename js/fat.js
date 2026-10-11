@@ -41,9 +41,7 @@ class FAT {
                 if (this.bmz) this.bmz.navigateAlarm(1);
             });
         }
-        if (this.btnEbene) {
-            this.btnEbene.addEventListener('click', () => alert("Anzeigeebene umgeschaltet"));
-        }
+        // Anzeigeebene / Historie: noch nicht umgesetzt
 
         // Summer Ab / Lampentest Timer (5s gedrückt halten)
         if (this.btnSummerAb) {
@@ -55,7 +53,7 @@ class FAT {
                 }, 5000);
             };
 
-            const stopSummerTimer = () => {
+            const stopSummerTimer = (cancelled) => {
                 if (this.summerBtnTimer) {
                     clearTimeout(this.summerBtnTimer);
                     this.summerBtnTimer = null;
@@ -64,17 +62,13 @@ class FAT {
                 if (this.bmz) {
                     if (this.bmz.lampTestActive) {
                         this.bmz.setLampTest(false);
-                    } else if (!this.summerBtnHoldTriggered) {
+                    } else if (!this.summerBtnHoldTriggered && !cancelled) {
                         this.bmz.silenceBuzzer();
                     }
                 }
             };
 
-            this.btnSummerAb.addEventListener('mousedown', startSummerTimer);
-            this.btnSummerAb.addEventListener('mouseup', stopSummerTimer);
-            this.btnSummerAb.addEventListener('mouseleave', stopSummerTimer);
-            this.btnSummerAb.addEventListener('touchstart', startSummerTimer);
-            this.btnSummerAb.addEventListener('touchend', stopSummerTimer);
+            bindPress(this.btnSummerAb, startSummerTimer, stopSummerTimer);
         }
     }
 
